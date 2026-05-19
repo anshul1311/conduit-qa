@@ -1,0 +1,29 @@
+{
+  "name": "conduit-qa-framework",
+  "version": "1.0.0",
+  "description": "Agentic-first Playwright + TypeScript test framework for the Conduit (RealWorld) app",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:api": "playwright test tests/api",
+    "test:ui": "playwright test tests/ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "PWDEBUG=1 playwright test",
+    "report": "playwright show-report",
+    "agent:scaffold": "ts-node scripts/scaffold-test.ts",
+    "agent:check": "ts-node scripts/agent-check.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"**/*.{ts,md,json}\""
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "@types/node": "^20.11.0",
+    "dotenv": "^16.4.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  }
+}
