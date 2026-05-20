@@ -116,8 +116,9 @@ npm run agent:scaffold delete-comment api
 
 ## Anti-patterns the `agent:check` script will reject
 
-These are the mistakes AI agents make most often. The check script runs in
-pre-commit (mention to add a hook).
+These are the mistakes AI agents make most often. Run `npm run agent:check`
+locally before you push — and wire it into CI when CI exists (see
+DECISIONS.md decision #5 for what that workflow would look like).
 
 - `import .* from '@playwright/test'` inside `tests/` (bypasses fixtures).
 - `Math.random()` for test data (use `uniqueToken()`).
@@ -134,7 +135,18 @@ Run `npm run agent:check` before you push.
 
 ## When in doubt
 
-Read an existing test. The four shipped tests (`auth.spec.ts`,
-`article-crud.spec.ts`, `favorite.spec.ts`, `publish-and-view.spec.ts`) are
-the reference implementations for the patterns above. Mimic them, don't
-invent new patterns without a reason.
+Read an existing test. The seven shipped specs are the reference
+implementations for the patterns above — pick the one whose shape matches
+what you're adding:
+
+| Pattern | Look at |
+| --- | --- |
+| UI happy path | `tests/ui/auth.spec.ts` (register + sign in) |
+| UI error / validation path | `tests/ui/auth.spec.ts` (invalid login) |
+| UI cross-stack (publish + verify) | `tests/ui/publish-and-view.spec.ts` |
+| API CRUD with poll for SUT race | `tests/api/article-crud.spec.ts` |
+| API two-user cross interaction | `tests/api/favorite.spec.ts`, `tests/api/follow.spec.ts` |
+| API lifecycle (create + list + delete) | `tests/api/comments.spec.ts` |
+| API negative-auth (403 expected) | `tests/api/authorization.spec.ts` — uses `api.raw()` to bypass `toBeOK` |
+
+Mimic, don't invent. New patterns should land with a DECISIONS.md entry.

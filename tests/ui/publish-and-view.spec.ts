@@ -54,7 +54,11 @@ test('a logged-in user can publish an article and see it on home', async ({
   track(articlePage.currentSlug());
 
   // --- Verify on the global feed -------------------------------------------
+  // Conduit's Home defaults to "Your Feed" for logged-in users, which only
+  // shows articles by users you follow. A fresh test user follows nobody, so
+  // we switch to Global Feed before our article shows up.
   const home = new HomePage(page);
   await home.open();
+  await home.selectGlobalFeed();
   await home.assertArticleVisible(article.title);
 });

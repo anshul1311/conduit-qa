@@ -8,7 +8,7 @@
     "test:api": "playwright test tests/api",
     "test:ui": "playwright test tests/ui",
     "test:headed": "playwright test --headed",
-    "test:debug": "PWDEBUG=1 playwright test",
+    "test:debug": "cross-env PWDEBUG=1 playwright test",
     "report": "playwright show-report",
     "agent:scaffold": "ts-node scripts/scaffold-test.ts",
     "agent:check": "ts-node scripts/agent-check.ts",
@@ -19,6 +19,7 @@
   "devDependencies": {
     "@playwright/test": "^1.45.0",
     "@types/node": "^20.11.0",
+    "cross-env": "^7.0.3",
     "dotenv": "^16.4.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"

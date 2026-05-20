@@ -154,13 +154,33 @@ export class ConduitApi {
     return ((await res.json()) as CommentsResponse).comments;
   }
 
+  async deleteComment(slug: string, commentId: number): Promise<void> {
+    const res = await this.ctx.delete(`/api/articles/${slug}/comments/${commentId}`);
+    expect(
+      [200, 204].includes(res.status()),
+      `DELETE /articles/${slug}/comments/${commentId} returned ${res.status()}: ${await safeBody(res)}`,
+    ).toBe(true);
+  }
+
   // -------------------------------------------------------------------------
-  // Profiles
+  // Profiles + follow
   // -------------------------------------------------------------------------
 
   async getProfile(username: string): Promise<Profile> {
     const res = await this.ctx.get(`/api/profiles/${username}`);
     await expect(res, `GET /profiles/${username} failed: ${await safeBody(res)}`).toBeOK();
+    return ((await res.json()) as ProfileResponse).profile;
+  }
+
+  async followUser(username: string): Promise<Profile> {
+    const res = await this.ctx.post(`/api/profiles/${username}/follow`);
+    await expect(res, `POST /profiles/${username}/follow failed: ${await safeBody(res)}`).toBeOK();
+    return ((await res.json()) as ProfileResponse).profile;
+  }
+
+  async unfollowUser(username: string): Promise<Profile> {
+    const res = await this.ctx.delete(`/api/profiles/${username}/follow`);
+    await expect(res, `DELETE /profiles/${username}/follow failed: ${await safeBody(res)}`).toBeOK();
     return ((await res.json()) as ProfileResponse).profile;
   }
 

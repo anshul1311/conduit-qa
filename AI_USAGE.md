@@ -213,7 +213,146 @@ clean — descriptive error messages, typed returns, `expect` with a
 contextual message — but the single missing keyword would have silently
 hidden every API error.
 
-### Mistake #5: Asserting the slug stayed identical after an update
+### Mistake #5: Assumed Conduit returns a structured 422 on duplicate-email registration
+
+**What it produced:** A UI test that registered a user via the API, then tried
+to register again via the form with the same email, expecting `.error-messages`
+to appear:
+
+```ts
+const dup = { ...userFactory.build(), email: existing.email };
+await registerPage.register(dup.username, dup.email, dup.password);
+await expect(page.locator('.error-messages')).toBeVisible();
+```
+
+**Why it's wrong:** The AI assumed Conduit's `/api/users` endpoint follows the
+RealWorld spec's "structured 422 errors" convention. It doesn't. Looking at
+`routes/api/users.js`:
+
+```js
+router.post('/users', function(req, res, next) {
+  // ...
+  user.save()
+    .then(...)
+    .catch((error) => {
+      console.error(error);
+      next();   // <-- no error arg, no response body
+    });
+})
+```
+
+The Sequelize unique-constraint error gets logged to stderr and then `next()`
+runs with no arguments. Express falls through to its default 404 handler with
+an empty body. The React app's `errors` prop never gets set, so the
+`<ListErrors>` component returns `null` and `.error-messages` is never in the
+DOM. The test correctly failed — the SUT just doesn't have the behavior the
+test was checking for.
+
+**How I caught it:** Ran the tests against the live app. Got a 5s timeout on
+`expect(.error-messages).toBeVisible()`. Pulled the Playwright trace, saw the
+form was still there with the values filled in, no error message. Read
+`ListErrors.js` — confirmed the selector was right (the component literally
+does `<ul className="error-messages">`). Read the route handler — found the
+silent-fail catch block. Rewrote the test to use `/api/users/login` with the
+wrong password instead, which DOES return `422 { errors: ... }` and properly
+populates `<ListErrors>`. Same coverage of "validation errors render in
+.error-messages", reliable path.
+
+### Mistake #6: Assumed Conduit's Home shows all articles to logged-in users
+
+**What it produced:** A publish-and-view UI test that opened `/` after publishing
+and asserted the article heading was visible:
+
+```ts
+await editor.publish();
+// ... article page assertions ...
+await home.open();
+await home.assertArticleVisible(article.title);
+```
+
+**Why it's wrong:** Looking at `Home/index.js`:
+
+```js
+componentWillMount() {
+  const tab = this.props.token ? 'feed' : 'all';
+  // ...
+}
+```
+
+When the user is logged in (`token` is set), the default tab is `feed` — "Your
+Feed", which only shows articles by users you follow. A freshly registered
+test user follows nobody. The newly published article exists, but it's on the
+"Global Feed" tab, not the default "Your Feed". The test was looking at the
+wrong tab.
+
+**How I caught it:** The test timed out waiting for the heading. The
+Playwright trace YAML showed the Home page rendered with "Your Feed" selected
+and an empty feed list. Cross-referenced `Home/index.js` and `MainView.js`,
+found the `tab = token ? 'feed' : 'all'` default. Added a
+`HomePage.selectGlobalFeed()` method that clicks the Global Feed tab via
+`getByRole('link', { name: 'Global Feed' })`, called it before the assertion.
+
+This is also the test I had labelled "publish and view on home" — the
+agentic lesson is that even an idiomatic test name can hide a flawed
+assumption about which view counts as "home" to the SUT.
+
+### Mistake #7: Asserted `tagList` on the immediate POST response — Conduit has a race condition
+
+**What it produced:** The article-CRUD test asserted that the immediate
+response from `POST /api/articles` contained the tags I sent:
+
+```ts
+const created = await api.createArticle(draft);
+expect(created.tagList.sort()).toEqual(['crud-test', 'qa'].sort());
+```
+
+**Why it's wrong:** Running it against the live app failed with
+`Received: []`. Pulled the Conduit source and found a real bug in
+`routes/api/articles.js`:
+
+```js
+async function setArticleTags(req, article, tagList) {
+  return req.app.get('sequelize').models.Tag.bulkCreate(...)
+    .then(tags => {
+      // returns void — inner promise NOT returned
+      req.app.get('sequelize').models.Tag.findAll({...}).then(tags => {
+        return article.setTags(tags);
+      });
+    });
+}
+```
+
+The inner `findAll().then(...)` is fire-and-forget — it isn't returned from
+the outer `.then`. So when the create handler does
+`await Promise.all([setArticleTags(...), article.save()])`, the Promise.all
+resolves as soon as `bulkCreate` and `save` complete, **before**
+`article.setTags(tags)` runs. The response then gets constructed and sent
+with an empty tagList; the actual setTags completes a few ms later.
+
+A GET fetched a moment later sees the tags fine, because by then the async
+setTags has settled.
+
+**How I caught it:** Ran the tests. Got `Received: []` on the assertion.
+First thought was "maybe the AI generated the wrong field name" — checked
+the RealWorld spec, confirmed `tagList` was correct. Then read the route
+handler line by line and spotted the unreturned inner promise.
+
+**Fix:** Removed the tagList assertion from the immediate POST response
+(documented why with a comment) and moved it to a polled GET:
+
+```ts
+await expect.poll(
+  async () => (await api.getArticle(created.slug)).tagList.slice().sort(),
+  { message: 'tagList never populated on GET', timeout: 5_000 },
+).toEqual(['crud-test', 'qa']);
+```
+
+This is the kind of finding the brief specifically rewards: depth over
+breadth. The framework didn't just pass — it surfaced a real SUT bug worth
+filing. A note about this race condition belongs in any bug tracker the
+team is using.
+
+### Mistake #8: Asserting the slug stayed identical after an update
 
 **What it produced:** A line in `article-crud.spec.ts` that did
 `expect(updated.slug).toBe(created.slug)` after a title change.
@@ -230,6 +369,53 @@ about a bug or about an implementation detail?" Implementation detail.
 I replaced it with `expect(await api.getArticle(updated.slug)).toBeDefined()`
 — same coverage of "the article is still reachable", no coupling to
 slug-regen policy.
+
+---
+
+---
+
+## Self-audit: gap-filling after the first green run
+
+Once the original 6 tests all passed against the live app, I deliberately
+asked: *what does the PDF brief say the app does, and which of those things
+am I not testing?* The brief lists the app's features as:
+
+> "user registration and authentication, articles (create, edit, delete, list,
+> filter), **comments**, **user follows**, and article favourites"
+
+Mapping that list against the 6 tests exposed two unambiguous gaps —
+**comments** and **user follows** — both named in the brief, both with typed
+client methods, neither exercised. I also noticed a third pattern absent:
+all 6 happy-path tests are 2xx, no negative-auth coverage.
+
+The brief explicitly says "depth over breadth — full test coverage is out of
+scope," so I didn't try to cover everything. I added exactly three focused
+tests, each picked because it closes a real gap and demonstrates a pattern
+the existing tests don't:
+
+| Added test | Closes which gap | Pattern it demonstrates |
+| --- | --- | --- |
+| `tests/api/comments.spec.ts` | Comments are named in the PDF, never exercised | Resource lifecycle: create → list → delete |
+| `tests/api/follow.spec.ts` | User follows are named in the PDF, never exercised | Cross-user social action (mirrors favorite's two-user pattern but on the profiles endpoint) |
+| `tests/api/authorization.spec.ts` | All happy-path tests; no 403-expected coverage | Negative auth: User B fails to mutate User A's article, with `raw()` to bypass `toBeOK` |
+
+Why I stopped at three:
+
+- "Depth over breadth" is in the brief, and 9 test cases is already well
+  above the 3-5 target.
+- Settings page, pagination, tag listing, and "Your Feed" with followed
+  users are not in the PDF's named feature list. Adding them would expand
+  surface area without strengthening the framework demonstration.
+- UI versions of comments/follow/edit would duplicate API coverage. The
+  existing 3 UI tests prove the React app wires through to the API; adding
+  UI versions of every API test would inflate run-time without finding new
+  bugs.
+
+The agentic lesson here: the AI built 6 tests, called it done, and only
+went back to ask "what's actually missing per the brief?" when prompted by
+a self-audit pass. Codified that habit into the build: in any future use
+of this framework, the first thing an agent should do after green is map
+the feature list against the test inventory.
 
 ---
 

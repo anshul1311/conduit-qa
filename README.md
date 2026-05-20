@@ -20,6 +20,10 @@ made that I caught — see [AI_USAGE.md](./AI_USAGE.md).
 ## Prerequisites
 
 - **Node 18.17+** (the framework uses Playwright 1.45).
+- **macOS, Linux, or Windows** — the framework is OS-agnostic. All `npm`
+  scripts use cross-platform syntax (`cross-env` for env vars, forward-slash
+  paths, no shell-specific commands). Tests use Node's `path.join` /
+  `fs` rather than `bash` invocations.
 - The Conduit app cloned and running locally:
 
   ```bash
@@ -44,8 +48,13 @@ npm install
 # 2. Install the Playwright browser (chromium only — multi-browser is out of scope)
 npx playwright install chromium
 
-# 3. (Optional) Copy the env file. Defaults already point at 4101 / 3000.
-cp .env.example .env
+# 3. (Optional) Override the default ports.
+# The defaults already point at UI=4101 / API=3000, so you only need this
+# if the SUT is running on different ports. Copy .env.example to .env and
+# edit. Use whatever copy command your shell supports:
+#   bash/zsh:    cp .env.example .env
+#   PowerShell:  Copy-Item .env.example .env
+#   cmd.exe:     copy .env.example .env
 
 # 4. Run everything
 npm test
@@ -67,14 +76,19 @@ is at `playwright-report/`.
 
 ## What's included
 
-Four tests covering critical flows across UI and API:
+Seven spec files / nine test cases covering the critical flows the assignment
+brief explicitly lists (user registration + auth, articles, comments, follows,
+favourites):
 
-| Test | Layer | What it proves |
+| Spec | Layer | What it proves |
 | --- | --- | --- |
-| `tests/ui/auth.spec.ts` | UI | A new user can register, log out, and log back in via the form. A duplicate email surfaces a validation error. |
-| `tests/api/article-crud.spec.ts` | API | Full create → read → update → delete cycle. Author filter on list endpoint works. |
-| `tests/api/favorite.spec.ts` | API | A second user can favorite and unfavorite an article. The count updates. |
-| `tests/ui/publish-and-view.spec.ts` | UI | A logged-in user can publish an article through the editor and it renders on the article page and home feed. |
+| `tests/ui/auth.spec.ts` | UI | New user can register and sign in via the form. Invalid login surfaces `.error-messages`. |
+| `tests/ui/publish-and-view.spec.ts` | UI | Logged-in user publishes an article through the editor, sees it on the article page and on the Global Feed tab on home. |
+| `tests/api/article-crud.spec.ts` | API | Full create → read → update → delete cycle (with a poll workaround for the Conduit tag-attach race — see AI_USAGE.md #7). Author filter on list endpoint. |
+| `tests/api/favorite.spec.ts` | API | A second user favorites + unfavorites an article. `favoritesCount` updates from 0 → 1 → 0. |
+| `tests/api/comments.spec.ts` | API | Post a comment on an article, see it in the list, delete it, confirm it's gone. |
+| `tests/api/follow.spec.ts` | API | User A follows + unfollows User B. `Profile.following` flips on read. |
+| `tests/api/authorization.spec.ts` | API | User B gets `403` when trying to edit or delete User A's article — negative-auth coverage. |
 
 ---
 
