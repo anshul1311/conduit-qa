@@ -2,8 +2,15 @@
 
 How AI was actually used to build this framework. The brief asks for specific
 prompts, specific responses, and at least one example where the AI got
-something wrong and I caught it. The mistakes are at the end — they're the
-most useful part.
+something wrong and I caught it.
+
+This file has three parts, in order:
+1. **Prompts** — what I asked the AI for, in the sequence I asked.
+2. **Mistakes** — eight things the AI got wrong and how I caught each one.
+   This is the section the brief specifically values. One of them (#7)
+   surfaced a real bug in the Conduit backend.
+3. **Self-audit** — what I did after the first all-green run to catch the
+   gaps a passing test suite was hiding.
 
 ## Tools
 
@@ -82,7 +89,10 @@ Used the components I'd already read in step 2 to ground the selectors.
 > does the work. Use the `API setup, UI assert` pattern in the
 > publish-and-view test rather than re-doing the registration form."
 
-Used roughly as-is.
+Used roughly as-is. After the first green run I went back and added three
+more tests (comments, follow, authorization) to close gaps in the brief's
+feature list — see the **Self-audit** section at the bottom of this file
+for the reasoning.
 
 ### 7. Write the docs
 
@@ -369,8 +379,6 @@ about a bug or about an implementation detail?" Implementation detail.
 I replaced it with `expect(await api.getArticle(updated.slug)).toBeDefined()`
 — same coverage of "the article is still reachable", no coupling to
 slug-regen policy.
-
----
 
 ---
 

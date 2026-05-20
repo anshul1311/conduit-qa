@@ -12,8 +12,9 @@ that make that work are codified in [AGENTS.md](./AGENTS.md), enforced by
 [`scripts/scaffold-test.ts`](./scripts/scaffold-test.ts).
 
 For the architecture rationale, see [DECISIONS.md](./DECISIONS.md). For how
-AI was actually used to build this framework — including a mistake the AI
-made that I caught — see [AI_USAGE.md](./AI_USAGE.md).
+AI was actually used to build this framework — including the eight mistakes
+the AI made that I caught (one of which surfaced a real bug in the Conduit
+backend) — see [AI_USAGE.md](./AI_USAGE.md).
 
 ---
 
@@ -102,8 +103,8 @@ src/
   pages/        Page objects (role/text selectors)
   support/      seed (uniqueness) + logger (structured JSON)
 tests/
-  api/          Article CRUD + favorite tests
-  ui/           Auth + publish-and-view tests
+  api/          article-crud, favorite, comments, follow, authorization
+  ui/           auth (register + sign in, invalid login), publish-and-view
 scripts/
   scaffold-test.ts   `npm run agent:scaffold <name> <ui|api>`
   agent-check.ts     `npm run agent:check`  — anti-pattern linter

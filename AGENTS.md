@@ -129,8 +129,6 @@ DECISIONS.md decision #5 for what that workflow would look like).
   the rule itself.
 - `Bearer ` in any auth header (RealWorld uses `Token <jwt>`).
 
-Run `npm run agent:check` before you push.
-
 ---
 
 ## When in doubt
